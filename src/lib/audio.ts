@@ -21,7 +21,7 @@ function getAudio(url: string, volume: number = 0.4): HTMLAudioElement {
 /**
  * Play a click/interaction sound
  */
-export function playClick() {
+export function playClick(): void {
   const audio = getAudio(CLICK_SOUND, 0.4);
   audio.currentTime = 0;
   audio.play().catch(err => console.error('Error playing click sound:', err));
@@ -30,7 +30,7 @@ export function playClick() {
 /**
  * Play a hover interaction sound
  */
-export function playHover() {
+export function playHover(): void {
   const audio = getAudio(CLICK_SOUND, 0.2);
   audio.currentTime = 0;
   audio.play().catch(err => console.error('Error playing hover sound:', err));
@@ -39,7 +39,7 @@ export function playHover() {
 /**
  * Play a success sound (e.g., when completing a mission)
  */
-export function playSuccess() {
+export function playSuccess(): void {
   const audio = getAudio(SUCCESS_SOUND, 0.5);
   audio.currentTime = 0;
   audio.play().catch(err => console.error('Error playing success sound:', err));
@@ -48,15 +48,26 @@ export function playSuccess() {
 /**
  * Play a level up celebration sound
  */
-export function playLevelUp() {
+export function playLevelUp(): void {
   const audio = getAudio(LEVEL_UP_SOUND, 0.6);
   audio.currentTime = 0;
   audio.play().catch(err => console.error('Error playing level up sound:', err));
 }
 
-// Preload all sounds
-export function preloadSounds() {
+/**
+ * Preload all sounds to avoid delays when playing them for the first time
+ */
+export function preloadSounds(): void {
   getAudio(CLICK_SOUND, 0.4);
   getAudio(SUCCESS_SOUND, 0.5);
   getAudio(LEVEL_UP_SOUND, 0.6);
 }
+
+/**
+ * Sound resources for use with the useSound hook
+ */
+export const SOUND_RESOURCES = {
+  click: CLICK_SOUND,
+  success: SUCCESS_SOUND,
+  levelUp: LEVEL_UP_SOUND
+};

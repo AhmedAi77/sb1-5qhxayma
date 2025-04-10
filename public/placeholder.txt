@@ -1,0 +1,2 @@
+Please save the anime character image you provided as 'character-image.jpg' in this same public folder.
+The image should be the one you shared, showing the anime character with dark hair, glowing red eyes, and a chain/snake necklace. 

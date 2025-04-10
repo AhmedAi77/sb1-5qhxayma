@@ -1,20 +1,350 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
-  Dumbbell, Trophy, ArrowUp, User as UserIcon, Star, Activity, Check 
+  Dumbbell, Trophy, ArrowUp, User as UserIcon, Star, Activity, Check,
+  LucideIcon, Heart, Flame, StretchVertical, MoveRight, Footprints, GraduationCap
 } from 'lucide-react';
 import { Toaster, toast } from 'react-hot-toast';
 import useSound from 'use-sound';
-import { quotes } from './data/quotes';
-import { exercises } from './data/exercises';
-import { FavoritesModal } from './components/FavoritesModal';
-import { StatsModal } from './components/StatsModal';
-import { LanguageToggle } from './components/LanguageToggle';
-import { NameDialog } from './components/NameDialog';
-import { LoadingScreen } from './components/LoadingScreen';
+import { 
+  FavoritesModal, 
+  StatsModal,
+  LanguageToggle,
+  NameDialog,
+  LoadingScreen,
+  SplashScreen
+} from './components';
 import { useLanguage } from './contexts/LanguageContext';
-import type { User, Mission, Exercise, FavoriteExercise } from './types';
-import { loadUser, saveUser, findUserByName } from './lib/storage';
+import type { User, Mission, Exercise } from './types';
+import { 
+  loadUser, 
+  saveUser,
+  findUserByName, 
+  generateDailyMission, 
+  calculateRequiredExp,
+  toggleFavorite as toggleFavoriteExercise, 
+  createNewUser
+} from './lib';
+
+const getExerciseIcon = (type: string): LucideIcon => {
+  const icons: Record<string, LucideIcon> = {
+    'Crunches': Flame,
+    'Push-ups': Dumbbell,
+    'Squats': StretchVertical,
+    'Planks': StretchVertical,
+    'Lunges': Footprints,
+    'Burpees': Activity,
+    'Jumping Jacks': MoveRight,
+    'High Knees': MoveRight,
+    'Mountain Climbers': Footprints,
+    'Bird Dogs': StretchVertical,
+    'Fire Hydrants': Footprints,
+    'Glute Bridges': Heart,
+    'Wall Push-ups': Dumbbell,
+    'Russian Twists': Flame
+  };
+  
+  return icons[type] || Dumbbell;
+};
+
+// Function to add highlight spans to important words in a quote
+const formatQuote = (quote: string): React.ReactNode => {
+  // Words that should be highlighted
+  const highlightWords = [
+    'strength', 'power', 'progress', 'success', 'master', 'achieve', 
+    'victory', 'overcome', 'potential', 'limits', 'push', 'challenge',
+    'exceed', 'tomorrow', 'future', 'destiny', 'energy', 'focus',
+    'discipline', 'determination', 'consistency', 'training'
+  ];
+  
+  // Split the quote into words
+  const words = quote.split(' ');
+  
+  // Create an array of spans with highlighted words
+  return words.map((word, index) => {
+    const cleanWord = word.replace(/[.,!?;"'()]/g, '').toLowerCase();
+    
+    if (highlightWords.includes(cleanWord)) {
+      return (
+        <React.Fragment key={index}>
+          <span className="highlight-subtle">
+            {word}
+          </span>
+          {' '}
+        </React.Fragment>
+      );
+    }
+    
+    return (
+      <React.Fragment key={index}>
+        <span>{word}</span>
+        {' '}
+      </React.Fragment>
+    );
+  });
+};
+
+// Sparks effect component
+function SparksEffect() {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [sparks, setSparks] = useState<React.ReactNode[]>([]);
+  const [floatingParticles, setFloatingParticles] = useState<React.ReactNode[]>([]);
+  
+  const createSpark = useCallback((x: number, y: number, type: string = 'default') => {
+    const id = Date.now() + Math.random();
+    const duration = 0.5 + Math.random() * 0.8;
+    const angle = Math.random() * Math.PI * 2;
+    const distance = 30 + Math.random() * 80;
+    const tx = Math.cos(angle) * distance;
+    const ty = Math.sin(angle) * distance;
+    
+    const sparkClass = type === 'cyan' 
+      ? 'spark spark-cyan' 
+      : type === 'purple' 
+        ? 'spark spark-purple' 
+        : type === 'gold'
+          ? 'spark spark-gold'
+          : type === 'white'
+            ? 'spark spark-white'
+            : 'spark';
+    
+    const size = 2 + Math.random() * 4;
+    
+    const spark = (
+      <div
+        key={id}
+        className={sparkClass}
+        style={{
+          '--x': `${x}px`,
+          '--y': `${y}px`,
+          '--tx': `${tx}px`,
+          '--ty': `${ty}px`,
+          '--duration': `${duration}s`,
+          '--size': `${size}px`,
+          '--rotation': `${Math.random() * 360}deg`,
+          left: 0,
+          top: 0,
+        } as React.CSSProperties}
+        onAnimationEnd={() => {
+          setSparks(current => current.filter(s => (s as React.ReactElement).key !== id.toString()));
+        }}
+      />
+    );
+    
+    setSparks(current => [...current, spark]);
+  }, []);
+  
+  // Create drifting particles that move in smooth patterns
+  useEffect(() => {
+    if (!containerRef.current) return;
+    
+    const createDriftingParticles = () => {
+      const rect = containerRef.current?.getBoundingClientRect();
+      if (!rect) return [];
+      
+      const particles = [];
+      const count = 45; // Increased particle count
+      
+      for (let i = 0; i < count; i++) {
+        const id = `drift-${Date.now()}-${i}`;
+        const size = 1 + Math.random() * 3;
+        const x = Math.random() * rect.width;
+        const y = Math.random() * rect.height;
+        const duration = 15 + Math.random() * 20;
+        const delay = Math.random() * 10;
+        
+        // Create more particle types
+        const types = ['default', 'cyan', 'purple', 'gold', 'white'];
+        const type = types[Math.floor(Math.random() * types.length)];
+        
+        // Different movement patterns
+        const pattern = Math.floor(Math.random() * 5);
+        
+        let className = `drifting-particle pattern-${pattern}`;
+        if (type === 'cyan') className += ' drift-cyan';
+        if (type === 'purple') className += ' drift-purple';
+        if (type === 'gold') className += ' drift-gold';
+        if (type === 'white') className += ' drift-white';
+        
+        particles.push(
+          <div
+            key={id}
+            className={className}
+            style={{
+              '--x': `${x}px`,
+              '--y': `${y}px`,
+              '--size': `${size}px`,
+              '--duration': `${duration}s`,
+              '--delay': `${delay}s`,
+              '--opacity': `${0.3 + Math.random() * 0.4}`,
+              '--glow': `${3 + Math.random() * 7}px`,
+            } as React.CSSProperties}
+          />
+        );
+      }
+      
+      return particles;
+    };
+    
+    setFloatingParticles(createDriftingParticles());
+    
+    // Recreate some particles occasionally for continuous refreshing effect
+    const interval = setInterval(() => {
+      setFloatingParticles(prev => {
+        // Remove 5-10 particles
+        const removeCount = 5 + Math.floor(Math.random() * 5);
+        const remaining = prev.slice(0, prev.length - removeCount);
+        
+        // Add new ones
+        const rect = containerRef.current?.getBoundingClientRect();
+        if (!rect) return prev;
+        
+        const newParticles = [];
+        for (let i = 0; i < removeCount; i++) {
+          const id = `drift-${Date.now()}-${i}`;
+          const size = 1 + Math.random() * 3;
+          const x = Math.random() * rect.width;
+          const y = Math.random() * rect.height;
+          const duration = 15 + Math.random() * 20;
+          
+          // Create more particle types
+          const types = ['default', 'cyan', 'purple', 'gold', 'white'];
+          const type = types[Math.floor(Math.random() * types.length)];
+          
+          // Different movement patterns
+          const pattern = Math.floor(Math.random() * 5);
+          
+          let className = `drifting-particle pattern-${pattern}`;
+          if (type === 'cyan') className += ' drift-cyan';
+          if (type === 'purple') className += ' drift-purple';
+          if (type === 'gold') className += ' drift-gold';
+          if (type === 'white') className += ' drift-white';
+          
+          newParticles.push(
+            <div
+              key={id}
+              className={className}
+              style={{
+                '--x': `${x}px`,
+                '--y': `${y}px`,
+                '--size': `${size}px`,
+                '--duration': `${duration}s`,
+                '--delay': '0s',
+                '--opacity': `${0.3 + Math.random() * 0.4}`,
+                '--glow': `${3 + Math.random() * 7}px`,
+              } as React.CSSProperties}
+            />
+          );
+        }
+        
+        return [...remaining, ...newParticles];
+      });
+    }, 5000);
+    
+    return () => clearInterval(interval);
+  }, []);
+  
+  // Create energy points for the background
+  const [energyPoints, setEnergyPoints] = useState<React.ReactNode[]>([]);
+  
+  // Generate random sparks occasionally
+  useEffect(() => {
+    const createRandomSpark = () => {
+      if (containerRef.current) {
+        const rect = containerRef.current.getBoundingClientRect();
+        const x = Math.random() * rect.width;
+        const y = Math.random() * rect.height;
+        
+        const types = ['cyan', 'purple', 'gold', 'white', 'default'];
+        const type = types[Math.floor(Math.random() * types.length)];
+        
+        createSpark(x, y, type);
+      }
+    };
+    
+    const interval = setInterval(() => {
+      // Randomly create 1-5 sparks (increased)
+      const count = 1 + Math.floor(Math.random() * 5);
+      for (let i = 0; i < count; i++) {
+        setTimeout(createRandomSpark, i * 150);
+      }
+    }, 2500); // More frequent
+    
+    return () => clearInterval(interval);
+  }, [createSpark]);
+  
+  useEffect(() => {
+    const points = [];
+    // Create more energy points for a richer background
+    for (let i = 0; i < 40; i++) {
+      const id = `energy-${i}`;
+      const left = Math.random() * 100;
+      const top = Math.random() * 100;
+      const delay = Math.random() * 4;
+      const duration = 3 + Math.random() * 4;
+      const size = 1 + Math.random() * 2;
+      
+      // More color variety
+      const colorType = Math.random();
+      let color;
+      if (colorType < 0.3) color = 'cyan';
+      else if (colorType < 0.6) color = 'gold';
+      else if (colorType < 0.8) color = 'purple';
+      else color = 'white';
+      
+      points.push(
+        <div
+          key={id}
+          className={`energy-point energy-${color}`}
+          style={{
+            left: `${left}%`,
+            top: `${top}%`,
+            width: `${size}px`,
+            height: `${size}px`,
+            animationDuration: `${duration}s`,
+            animationDelay: `${delay}s`,
+          }}
+        />
+      );
+    }
+    setEnergyPoints(points);
+  }, []);
+  
+  // Add event listener to create sparks
+  useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      if (containerRef.current) {
+        const rect = containerRef.current.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        
+        // Create multiple sparks for each click
+        const count = 15 + Math.floor(Math.random() * 15); // Increased
+        const types = ['default', 'cyan', 'purple', 'gold', 'white'];
+        
+        for (let i = 0; i < count; i++) {
+          const type = types[Math.floor(Math.random() * types.length)];
+          setTimeout(() => {
+            createSpark(x, y, type);
+          }, i * 25); // Faster sequence
+        }
+      }
+    };
+    
+    document.addEventListener('click', handleClick);
+    return () => {
+      document.removeEventListener('click', handleClick);
+    };
+  }, [createSpark]);
+  
+  return (
+    <div ref={containerRef} className="spark-container">
+      {sparks}
+      {energyPoints}
+      {floatingParticles}
+    </div>
+  );
+}
 
 function App() {
   const { t } = useLanguage();
@@ -24,7 +354,8 @@ function App() {
   const [processingExercise, setProcessingExercise] = useState<number | null>(null);
   const [showFavorites, setShowFavorites] = useState(false);
   const [showStats, setShowStats] = useState(false);
-  const [showLoading, setShowLoading] = useState(true);
+  const [showSplash, setShowSplash] = useState(true);
+  const [showLoading, setShowLoading] = useState(false);
   
   const [playClick] = useSound('/sounds/click.mp3', { 
     volume: 0.4,
@@ -50,9 +381,9 @@ function App() {
     const savedUser = loadUser();
     if (savedUser) {
       setUser(savedUser);
-      setDailyMission(generateDailyMission(savedUser.level));
+      setDailyMission(generateDailyMission(savedUser.level, t));
     }
-  }, []);
+  }, [t]);
 
   const handleNameSubmit = (name: string) => {
     // Check if user already exists
@@ -60,141 +391,21 @@ function App() {
     
     if (existingUser) {
       setUser(existingUser);
-      setDailyMission(generateDailyMission(existingUser.level));
+      setDailyMission(generateDailyMission(existingUser.level, t));
     } else {
       // Create new user
-      const newUser: User = {
-        id: crypto.randomUUID(),
-        name,
-        email: '',
-        level: 1,
-        experience: 0,
-        completedMissions: 0,
-        streak: 0,
-        stats: {
-          totalExercises: 0,
-          totalReps: 0,
-          totalDistance: 0,
-          personalBests: {},
-          exerciseHistory: []
-        },
-        favorites: []
-      };
+      const newUser = createNewUser(name);
       
       setUser(newUser);
       saveUser(newUser);
-      setDailyMission(generateDailyMission(1));
+      setDailyMission(generateDailyMission(1, t));
       setShowWelcome(true);
       playSuccess();
     }
   };
 
-  const calculateRequiredExp = (level: number) => {
-    return Math.floor(200 * Math.pow(1.5, level - 1));
-  };
-
-  const generateDailyMission = (level: number): Mission => {
-    const difficulty = Math.min(Math.floor(level / 5), 2);
-    const exercisePool = difficulty === 0 ? exercises.beginner : 
-                        difficulty === 1 ? exercises.intermediate : 
-                        exercises.advanced;
-    
-    const selectedExercises = [];
-    const categories = ['Core', 'Upper Body', 'Lower Body', 'Cardio'];
-    
-    const getProgressedReps = (baseReps: number, progression: number, level: number) => {
-      return Math.floor(baseReps + (progression * (level - 1)));
-    };
-    
-    categories.forEach(category => {
-      const categoryExercises = exercisePool.filter(ex => 
-        ex.type.toLowerCase().includes(category.toLowerCase()) ||
-        (category === 'Core' && ['Plank', 'Crunch', 'V-Up', 'L-Sit', 'Flag'].some(term => 
-          ex.type.toLowerCase().includes(term.toLowerCase())
-        ))
-      );
-      
-      if (categoryExercises.length > 0) {
-        const randomEx = categoryExercises[Math.floor(Math.random() * categoryExercises.length)];
-        const progressedReps = getProgressedReps(randomEx.reps, randomEx.progression || 1, level);
-        
-        selectedExercises.push({
-          ...randomEx,
-          reps: progressedReps,
-          completed: false
-        });
-      }
-    });
-
-    while (selectedExercises.length < 6) {
-      const randomEx = exercisePool[Math.floor(Math.random() * exercisePool.length)];
-      if (!selectedExercises.find(ex => ex.type === randomEx.type)) {
-        const progressedReps = getProgressedReps(randomEx.reps, randomEx.progression || 1, level);
-        selectedExercises.push({
-          ...randomEx,
-          reps: progressedReps,
-          completed: false
-        });
-      }
-    }
-
-    const baseReward = 100;
-    const levelMultiplier = 1 + (level - 1) * 0.1;
-    const difficultyMultiplier = 1 + difficulty * 0.5;
-
-    return {
-      id: Date.now(),
-      title: t('mission.title'),
-      description: quotes[Math.floor(Math.random() * quotes.length)],
-      exercises: selectedExercises.slice(0, 6),
-      difficulty,
-      experienceReward: Math.floor(baseReward * levelMultiplier * difficultyMultiplier),
-      completed: false
-    };
-  };
-
-  const toggleFavorite = (exercise: Exercise) => {
-    if (!user) return;
-    
-    try {
-      const isFavorite = user.favorites.some(fav => fav.type === exercise.type);
-      
-      if (isFavorite) {
-        const updatedUser = {
-          ...user,
-          favorites: user.favorites.filter(fav => fav.type !== exercise.type)
-        };
-        setUser(updatedUser);
-        saveUser(updatedUser);
-        toast.success(`Removed ${exercise.type} from favorites!`, {
-          icon: '💔',
-          duration: 2000
-        });
-      } else {
-        const newFavorite: FavoriteExercise = {
-          id: crypto.randomUUID(),
-          type: exercise.type,
-          personalBest: exercise.reps,
-          timesPerformed: 1,
-          lastPerformed: new Date()
-        };
-        
-        const updatedUser = {
-          ...user,
-          favorites: [...user.favorites, newFavorite]
-        };
-
-        setUser(updatedUser);
-        saveUser(updatedUser);
-        toast.success(`Added ${exercise.type} to favorites!`, {
-          icon: '⭐',
-          duration: 2000
-        });
-      }
-    } catch (error) {
-      console.error('Error updating favorites:', error);
-      toast.error('Failed to update favorites');
-    }
+  const handleToggleFavorite = (exercise: Exercise) => {
+    toggleFavoriteExercise(user, exercise, setUser);
   };
 
   const handleExerciseComplete = async (index: number) => {
@@ -251,6 +462,20 @@ function App() {
         await new Promise(resolve => setTimeout(resolve, 300));
         playSuccess();
 
+        // Display toast notification for completing mission
+        toast.success(t('mission.completed'), {
+          icon: '🏆',
+          duration: 3000,
+          style: {
+            background: 'rgba(15, 7, 40, 0.95)',
+            color: '#FCD34D',
+            border: '1px solid rgba(234, 179, 8, 0.3)',
+            borderRadius: '0.75rem',
+            padding: '0.75rem 1rem',
+            boxShadow: '0 4px 6px rgba(0, 0, 0, 0.25), 0 1px 3px rgba(0, 0, 0, 0.3)'
+          }
+        });
+
         const newExperience = user.experience + dailyMission.experienceReward;
         const experienceNeeded = calculateRequiredExp(user.level);
         let newLevel = user.level;
@@ -261,9 +486,17 @@ function App() {
           playLevelUp();
           newLevel++;
           remainingExp = newExperience - experienceNeeded;
-          toast.success(`Level Up! You are now level ${newLevel}!`, {
+          toast.success(`${t('level.up')} ${newLevel}!`, {
             icon: '⬆️',
-            duration: 3000
+            duration: 4000,
+            style: {
+              background: 'rgba(15, 7, 40, 0.95)',
+              color: '#FCD34D',
+              border: '1px solid rgba(234, 179, 8, 0.3)',
+              borderRadius: '0.75rem',
+              padding: '0.75rem 1rem',
+              boxShadow: '0 10px 15px -3px rgba(234, 179, 8, 0.3), 0 4px 6px -2px rgba(234, 179, 8, 0.15)'
+            }
           });
         }
 
@@ -281,8 +514,21 @@ function App() {
 
         // Generate new mission after a delay
         await new Promise(resolve => setTimeout(resolve, 1000));
-        setDailyMission(generateDailyMission(newLevel));
+        setDailyMission(generateDailyMission(newLevel, t));
       } else {
+        // Show completion toast for individual exercise
+        toast.success(t('exercise.completed'), {
+          icon: '✅',
+          duration: 2000,
+          style: {
+            background: 'rgba(15, 7, 40, 0.95)',
+            color: '#48BB78',
+            border: '1px solid rgba(72, 187, 120, 0.3)',
+            borderRadius: '0.75rem',
+            padding: '0.5rem 0.75rem'
+          }
+        });
+        
         // Update user stats only
         const updatedUser = {
           ...user,
@@ -300,25 +546,104 @@ function App() {
     }
   };
 
-  if (showLoading) {
-    return <LoadingScreen onComplete={() => setShowLoading(false)} />;
-  }
-
   if (!user) {
     return (
+      <>
+        {showSplash && (
+          <SplashScreen onComplete={() => {
+            setShowSplash(false);
+            setShowLoading(true);
+          }} />
+        )}
+        {showLoading && (
+          <LoadingScreen onComplete={() => setShowLoading(false)} />
+        )}
+        {!showSplash && !showLoading && (
       <NameDialog
         onSubmit={handleNameSubmit}
         playClick={playClick}
         playHover={playHover}
       />
+        )}
+      </>
     );
   }
 
-  const experienceNeeded = calculateRequiredExp(user.level);
-  const experiencePercentage = Math.min((user.experience / experienceNeeded) * 100, 100);
-
   return (
-    <div className="min-h-screen bg-[#070412] flex flex-col overflow-hidden relative animated-bg">
+    <div className="relative min-h-screen text-white bg-gradient-to-br from-[#070412] via-[#0a0215] to-[#0f0421] overflow-x-hidden">
+      <Toaster position="top-center" />
+      
+      {/* Sparks Effect */}
+      <SparksEffect />
+      
+      <div className="animated-bg">
+        <div className="nebula" style={{ top: '10%', left: '20%' }}></div>
+        <div className="nebula"></div>
+        <div className="nebula"></div>
+        
+        {/* Scanning line effect */}
+        <div className="scanning-line" style={{ animationDelay: '0s' }}></div>
+        <div className="scanning-line" style={{ animationDelay: '7.5s' }}></div>
+        
+        {/* Stars effect */}
+        {Array.from({ length: 50 }).map((_, i) => (
+          <div 
+            key={`star-${i}`} 
+            className="star"
+            style={{
+              '--top': `${Math.random() * 100}%`,
+              '--left': `${Math.random() * 100}%`,
+              '--duration': `${3 + Math.random() * 5}s`,
+              '--delay': `${Math.random() * 5}s`,
+              '--opacity': `${0.3 + Math.random() * 0.3}`,
+              '--opacity-bright': `${0.7 + Math.random() * 0.3}`,
+              '--size': `${1 + Math.random() * 2}px`,
+            } as React.CSSProperties}
+          ></div>
+        ))}
+        
+        {/* Data stream effect */}
+        {Array.from({ length: 10 }).map((_, i) => (
+          <div 
+            key={`data-stream-${i}`} 
+            className="data-stream"
+            style={{
+              '--left': `${Math.random() * 100}%`,
+              '--duration': `${6 + Math.random() * 6}s`,
+              '--delay': `${Math.random() * 10}s`,
+              '--opacity': `${0.2 + Math.random() * 0.2}`,
+            } as React.CSSProperties}
+          ></div>
+        ))}
+        
+        {/* Floating particles */}
+        {Array.from({ length: 20 }).map((_, i) => (
+          <div 
+            key={`particle-${i}`} 
+            className={`particle ${i % 2 === 0 ? 'particle-cyan' : ''}`}
+            style={{
+              '--left': `${Math.random() * 100}%`,
+              '--duration': `${15 + Math.random() * 15}s`,
+              '--delay': `${Math.random() * 5}s`,
+              '--opacity': `${0.2 + Math.random() * 0.3}`,
+            } as React.CSSProperties}
+          ></div>
+        ))}
+      </div>
+      
+      {showSplash && (
+        <SplashScreen onComplete={() => {
+          setShowSplash(false);
+          setShowLoading(true);
+        }} />
+      )}
+      
+      {showLoading && (
+        <LoadingScreen onComplete={() => setShowLoading(false)} />
+      )}
+      
+      {!showSplash && !showLoading && (
+        <>
       <LanguageToggle />
       <div className="absolute inset-0 bg-gradient-to-br from-[#2D1B4E]/30 via-[#070412] to-[#4C1D95]/30" />
       
@@ -350,98 +675,122 @@ function App() {
         )}
       </AnimatePresence>
 
-      <div className="relative flex-1 max-h-screen flex flex-col p-2 sm:p-4 gap-2 sm:gap-4">
+          <div className="container mx-auto px-4 py-6 flex flex-col gap-6 min-h-screen">
         <motion.header 
-          initial={{ y: -20 }}
-          animate={{ y: 0 }}
-          className="glass-card rounded-xl p-3 sm:p-4"
-        >
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              initial={{ opacity: 0, y: -20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="glass-card rounded-xl p-4 sm:p-6 border border-purple-600/30"
+            >
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-[#2D1B4E]/30 rounded-lg">
-                <UserIcon className="text-yellow-600/90 w-5 h-5 sm:w-6 sm:h-6" />
+                  <div className="w-10 h-10 rounded-lg bg-purple-600/40 flex items-center justify-center">
+                    <UserIcon className="text-purple-300 w-6 h-6" />
               </div>
               <div>
-                <h2 className="text-base sm:text-lg font-bold font-display text-yellow-600/90">{user.name}</h2>
-                <p className="text-sm font-body text-purple-200/90">
-                  {t('header.level')} {user.level} {t('header.hunter')}
-                </p>
+                    <div className="flex items-center gap-2">
+                      <h1 className="text-lg sm:text-xl font-display text-purple-300 drop-shadow-md">{user.name}</h1>
+                      <div className="flex items-center gap-1 bg-purple-600/15 px-2 py-0.5 rounded-full border border-purple-600/25">
+                        <Trophy className="text-purple-300 w-3.5 h-3.5" />
+                        <span className="text-xs text-purple-300">{t('header.level')} {user.level}</span>
+                      </div>
+                    </div>
+                    <p className="text-xs sm:text-sm text-purple-200/80 font-body">{t('header.hunter')}</p>
               </div>
             </div>
             
-            <div className="flex items-center gap-2">
-              <button
+                <div className="flex items-center gap-3">
+                  <motion.button
                 onClick={() => setShowStats(true)}
                 onMouseEnter={() => playHover()}
-                className="flex items-center gap-2 bg-[#2D1B4E]/30 p-2 rounded-lg border border-yellow-600/20 hover:bg-[#2D1B4E]/40 transition-colors"
-              >
-                <Activity className="text-yellow-600/90 w-4 h-4 sm:w-5 sm:h-5" />
-                <span className="text-sm text-yellow-600/90 hidden sm:inline">{t('header.stats')}</span>
-              </button>
-              
-              <button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    className="header-button flex items-center justify-center gap-2 bg-purple-500/15 p-3 rounded-lg border-2 border-purple-500/30 hover:bg-purple-500/20 transition-colors min-w-[46px] min-h-[46px]"
+                  >
+                    <Activity className="text-purple-300 w-5 h-5 sm:w-6 sm:h-6" />
+                    <span className="text-sm font-semibold text-purple-300 hidden sm:inline">{t('header.stats')}</span>
+                  </motion.button>
+                  
+                  <motion.button
                 onClick={() => setShowFavorites(true)}
                 onMouseEnter={() => playHover()}
-                className="flex items-center gap-2 bg-[#2D1B4E]/30 p-2 rounded-lg border border-yellow-600/20 hover:bg-[#2D1B4E]/40 transition-colors"
-              >
-                <Star className="text-yellow-600/90 w-4 h-4 sm:w-5 sm:h-5" />
-                <span className="text-sm text-yellow-600/90 hidden sm:inline">{t('header.favorites')}</span>
-              </button>
-              
-              <div className="flex items-center gap-2 bg-[#2D1B4E]/30 p-2 rounded-lg border border-yellow-600/20">
-                <Trophy className="text-yellow-600/90 w-4 h-4 sm:w-5 sm:h-5" />
-                <span className="text-sm text-yellow-600/90">{user.completedMissions}</span>
-              </div>
-            </div>
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    className="header-button flex items-center justify-center gap-2 bg-purple-500/15 p-3 rounded-lg border-2 border-purple-500/30 hover:bg-purple-500/20 transition-colors min-w-[46px] min-h-[46px]"
+                  >
+                    <Star className="text-purple-300 w-5 h-5 sm:w-6 sm:h-6" />
+                    <span className="text-sm font-semibold text-purple-300 hidden sm:inline">{t('header.favorites')}</span>
+                  </motion.button>
+                  
+                  <motion.div 
+                    whileHover={{ scale: 1.05 }}
+                    className="header-button flex items-center justify-center gap-2 bg-purple-500/15 p-3 rounded-lg border-2 border-purple-500/30 min-w-[46px] min-h-[46px]"
+                  >
+                    <Trophy className="text-purple-300 w-5 h-5 sm:w-6 sm:h-6" />
+                    <span className="text-sm font-semibold text-purple-300">{user.completedMissions}</span>
+                  </motion.div>
+                </div>
           </div>
         </motion.header>
 
-        <div className="flex-1 overflow-y-auto scrollbar-hide space-y-3 sm:space-y-4">
           {dailyMission && (
             <motion.div
               key={dailyMission.id}
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
-              className="glass-card rounded-xl p-4 sm:p-6"
-            >
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
-                <h3 className="text-base sm:text-xl font-bold font-display text-yellow-600/90">
-                  {dailyMission.title}
-                </h3>
-                <span className="text-sm text-yellow-600/90 bg-[#2D1B4E]/30 px-3 py-1 rounded-full border border-yellow-600/20 w-fit">
+                className="glass-card rounded-xl p-4 sm:p-6 border border-purple-600/30"
+              >
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="system-title">System</h3>
+                  <span className="mission-section text-sm text-cyan-400 bg-purple-600/20 px-3 py-1 rounded-full border border-purple-600/30">
                   {dailyMission.experienceReward} {t('mission.exp')}
                 </span>
               </div>
               
-              <p className="text-sm sm:text-base font-body text-purple-200/90 italic mb-4 sm:mb-6">"{dailyMission.description}"</p>
-              
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.2 }}
+                >
+                  <p className="system-quote">{formatQuote(dailyMission.description)}</p>
+                </motion.div>
+                
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mt-6 mb-4">
+                  <h3 className="text-base sm:text-xl font-bold font-display text-cyan-400 drop-shadow-sm">
+                    {dailyMission.title}
+                  </h3>
+                </div>
+                
+                <div className="space-y-3">
                 {dailyMission.exercises.map((exercise, idx) => (
                   <motion.div
                     key={`${dailyMission.id}-${idx}`}
                     initial={{ x: -20, opacity: 0 }}
                     animate={{ x: 0, opacity: 1 }}
                     transition={{ delay: idx * 0.1 }}
+                      whileHover={!exercise.completed ? { x: 5 } : {}}
                     className={`w-full exercise-card flex items-center gap-3 p-3 rounded-lg transition-all ${
                       exercise.completed 
-                        ? 'bg-green-900/20 border border-green-500/30' 
-                        : 'glass-effect'
+                          ? 'exercise-completed bg-green-900/30 border border-green-500/40' 
+                          : 'glass-effect border border-purple-600/20 hover:border-purple-600/40'
                     }`}
                   >
                     <div
-                      className={`p-2 rounded-lg transition-colors ${
+                        className={`p-2 rounded-lg transition-colors exercise-icon ${
                         exercise.completed
-                          ? 'bg-green-900/20 text-green-400'
-                          : 'bg-[#2D1B4E]/30 text-yellow-600/90'
+                            ? 'bg-green-900/30 text-green-400'
+                            : 'bg-purple-600/20 text-purple-400'
                       }`}
                     >
-                      <Dumbbell className="w-4 h-4 sm:w-5 sm:h-5" />
+                        {(() => {
+                          const Icon = getExerciseIcon(exercise.type);
+                          return <Icon className="w-4 h-4 sm:w-5 sm:h-5" />;
+                        })()}
                     </div>
                     
                     <div className="flex-1 text-left">
                       <div className="flex items-center gap-2">
-                        <h4 className="text-sm sm:text-base font-bold font-display text-yellow-600/90">
+                          <h4 className="text-sm sm:text-base font-bold font-display text-cyan-400 drop-shadow-sm">
                           {exercise.type}
                         </h4>
                         {exercise.completed && (
@@ -454,19 +803,19 @@ function App() {
                           </motion.div>
                         )}
                       </div>
-                      <p className="text-xs sm:text-sm text-purple-200/90">
+                        <p className="text-xs sm:text-sm text-purple-200">
                         {exercise.sets} x {exercise.reps} {t('mission.reps')}
                         {exercise.distance && ` • ${exercise.distance}m`}
                       </p>
                     </div>
 
                     <button
-                      onClick={() => toggleFavorite(exercise)}
+                        onClick={() => handleToggleFavorite(exercise)}
                       onMouseEnter={() => playHover()}
                       className={`p-2 rounded-lg transition-colors ${
                         user?.favorites.some(fav => fav.type === exercise.type)
-                          ? 'text-yellow-500 hover:bg-[#2D1B4E]/30'
-                          : 'text-purple-200/40 hover:text-yellow-500/80 hover:bg-[#2D1B4E]/30'
+                            ? 'text-purple-400 bg-purple-600/10 hover:bg-purple-600/20'
+                            : 'text-purple-200/60 hover:text-purple-400 hover:bg-purple-600/10'
                       }`}
                     >
                       <Star className="w-4 h-4 sm:w-5 sm:h-5" />
@@ -476,19 +825,15 @@ function App() {
                       onClick={() => !exercise.completed && handleExerciseComplete(idx)}
                       onMouseEnter={() => !exercise.completed && playHover()}
                       disabled={exercise.completed || processingExercise !== null}
-                      className={`w-10 h-10 flex items-center justify-center rounded-lg transition-colors ${
+                        className={`w-10 h-10 flex items-center justify-center rounded-lg transition-colors exercise-check ${
                         exercise.completed 
-                          ? 'bg-green-900/20 text-green-400 cursor-default' 
+                            ? 'bg-green-900/30 text-green-400 cursor-default' 
                           : processingExercise === idx
-                          ? 'bg-[#2D1B4E]/30 cursor-wait'
-                          : 'bg-[#2D1B4E]/30 hover:bg-[#2D1B4E]/40 text-yellow-600/90 cursor-pointer'
-                      }`}
-                    >
-                      {exercise.completed 
-                        ? <Check className="w-5 h-5" />
-                        : processingExercise === idx
-                        ? <div className="w-5 h-5 border-2 border-yellow-600/20 border-t-yellow-600/90 rounded-full animate-spin" />
-                        : <Check className="w-5 h-5" />}
+                            ? 'bg-purple-600/20 cursor-wait'
+                            : 'bg-purple-600/20 hover:bg-purple-600/30 text-purple-400 cursor-pointer'
+                        }`}
+                      >
+                        <Check className="w-4 h-4 sm:w-5 sm:h-5" />
                     </button>
                   </motion.div>
                 ))}
@@ -496,94 +841,8 @@ function App() {
             </motion.div>
           )}
         </div>
-
-        <motion.div 
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="glass-card rounded-xl p-4 sm:p-6 relative overflow-hidden"
-        >
-          <div className="absolute inset-0 bg-gradient-to-r from-yellow-600/5 via-yellow-500/10 to-yellow-600/5 animate-pulse-slow" />
-          
-          <div className="relative">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-lg bg-yellow-600/20 flex items-center justify-center">
-                  <Trophy className="w-5 h-5 text-yellow-600/90" />
-                </div>
-                <span className="text-lg font-display text-yellow-600/90">
-                  Level {user.level}
-                </span>
-              </div>
-              <div className="flex items-center gap-2 text-sm font-body">
-                <span className="text-purple-200/60">{user.experience}</span>
-                <span className="text-purple-200/40">/</span>
-                <span className="text-purple-200/60">{experienceNeeded}</span>
-                <span className="text-yellow-600/90 font-display">{t('mission.exp')}</span>
-              </div>
-            </div>
-
-            <div className="h-4 bg-[#2D1B4E]/30 rounded-full overflow-hidden relative">
-              <div className="absolute inset-0 opacity-10">
-                <div className="w-full h-full bg-[linear-gradient(45deg,transparent_25%,rgba(255,255,255,0.1)_25%,rgba(255,255,255,0.1)_50%,transparent_50%,transparent_75%,rgba(255,255,255,0.1)_75%)] bg-[length:20px_20px]" />
-              </div>
-
-              <motion.div
-                initial={{ width: 0 }}
-                animate={{ width: `${experiencePercentage}%` }}
-                transition={{ duration: 0.5, ease: "easeOut" }}
-                className="h-full progress-animate relative"
-              >
-                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-yellow-400/20 to-transparent animate-shine" />
-                <div className="absolute inset-0 bg-yellow-600/20 blur-sm" />
-              </motion.div>
-
-              <div className="absolute inset-0 flex justify-between px-1">
-                {Array.from({ length: 5 }).map((_, i) => (
-                  <div
-                    key={i}
-                    className="w-px h-full bg-purple-200/10"
-                    style={{ left: `${(i + 1) * 20}%` }}
-                  />
-                ))}
-              </div>
-            </div>
-          </div>
-        </motion.div>
-      </div>
-
-      <AnimatePresence>
-        {showFavorites && (
-          <FavoritesModal
-            favorites={user.favorites}
-            onClose={() => setShowFavorites(false)}
-            onRemove={(id) => {
-              const updatedUser = {
-                ...user,
-                favorites: user.favorites.filter(fav => fav.id !== id)
-              };
-              setUser(updatedUser);
-              saveUser(updatedUser);
-              toast.success('Removed from favorites!', {
-                icon: '💔',
-                duration: 2000
-              });
-            }}
-            playClick={playClick}
-            playHover={playHover}
-          />
-        )}
-      </AnimatePresence>
-
-      <AnimatePresence>
-        {showStats && user && user.stats && (
-          <StatsModal
-            stats={user.stats}
-            onClose={() => setShowStats(false)}
-            playClick={playClick}
-            playHover={playHover}
-          />
-        )}
-      </AnimatePresence>
+        </>
+      )}
     </div>
   );
 }

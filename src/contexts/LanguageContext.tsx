@@ -85,9 +85,21 @@ const translations = {
     // Favorites
     'favorites.title': 'Favorite Exercises',
     'favorites.empty': 'No favorite exercises yet',
+    'favorites.emptyMessage': 'Star exercises from your training to add them to your favorites',
     'favorites.best': 'Best',
     'favorites.timesPerformed': 'performed',
     'favorites.lastPerformed': 'Last performed',
+    'favorites.remove': 'Remove',
+    'favorites.exerciseDetails': 'Exercise Details',
+    'favorites.statisticsTitle': 'Statistics',
+    'favorites.progressTitle': 'Progress',
+    'favorites.strengthLevel': 'Strength Level',
+    'favorites.beginner': 'Beginner',
+    'favorites.intermediate': 'Intermediate',
+    'favorites.advanced': 'Advanced',
+    
+    // Common
+    'common.back': 'Back',
     
     // Language
     'language.toggle': 'العربية'
@@ -142,9 +154,21 @@ const translations = {
     // Favorites
     'favorites.title': 'التمارين المفضلة',
     'favorites.empty': 'لا توجد تمارين مفضلة بعد',
+    'favorites.emptyMessage': 'قم بتمييز التمارين من التدريب لإضافتها إلى المفضلة',
     'favorites.best': 'الأفضل',
     'favorites.timesPerformed': 'مرات التنفيذ',
     'favorites.lastPerformed': 'آخر تنفيذ',
+    'favorites.remove': 'إزالة',
+    'favorites.exerciseDetails': 'تفاصيل التمرين',
+    'favorites.statisticsTitle': 'الإحصائيات',
+    'favorites.progressTitle': 'التقدم',
+    'favorites.strengthLevel': 'مستوى القوة',
+    'favorites.beginner': 'مبتدئ',
+    'favorites.intermediate': 'متوسط',
+    'favorites.advanced': 'متقدم',
+    
+    // Common
+    'common.back': 'رجوع',
     
     // Language
     'language.toggle': 'English'
