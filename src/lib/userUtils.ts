@@ -17,11 +17,12 @@ export const toggleFavorite = (
         ...user,
         favorites: user.favorites.filter(fav => fav.type !== exercise.type)
       };
-      setUser(updatedUser);
+      
       saveUser(updatedUser);
+      
       toast.success(`Removed ${exercise.type} from favorites!`, {
         icon: '💔',
-        duration: 2000
+        duration: 1500
       });
     } else {
       const newFavorite: FavoriteExercise = {
@@ -37,11 +38,11 @@ export const toggleFavorite = (
         favorites: [...user.favorites, newFavorite]
       };
 
-      setUser(updatedUser);
       saveUser(updatedUser);
+      
       toast.success(`Added ${exercise.type} to favorites!`, {
         icon: '⭐',
-        duration: 2000
+        duration: 1500
       });
     }
   } catch (error) {

@@ -2,6 +2,12 @@ import { Mission, Exercise } from '../types';
 import { exercises } from '../data/exercises';
 import { quotes } from '../data/quotes';
 
+/**
+ * Calculates the required experience points needed to reach the next level
+ * Uses a progressive scaling formula where each level requires more XP
+ * @param level The user's current level
+ * @returns The amount of XP needed for the next level
+ */
 export const calculateRequiredExp = (level: number): number => {
   return Math.floor(200 * Math.pow(1.5, level - 1));
 };
@@ -29,7 +35,7 @@ export const generateDailyMission = (level: number, getTranslation: (key: string
     
     if (categoryExercises.length > 0) {
       const randomEx = categoryExercises[Math.floor(Math.random() * categoryExercises.length)];
-      const progressedReps = getProgressedReps(randomEx.reps, randomEx.progression || 1, level);
+      const progressedReps = getProgressedReps(randomEx.reps || 10, randomEx.progression || 1, level);
       
       selectedExercises.push({
         ...randomEx,
@@ -42,7 +48,7 @@ export const generateDailyMission = (level: number, getTranslation: (key: string
   while (selectedExercises.length < 6) {
     const randomEx = exercisePool[Math.floor(Math.random() * exercisePool.length)];
     if (!selectedExercises.find(ex => ex.type === randomEx.type)) {
-      const progressedReps = getProgressedReps(randomEx.reps, randomEx.progression || 1, level);
+      const progressedReps = getProgressedReps(randomEx.reps || 10, randomEx.progression || 1, level);
       selectedExercises.push({
         ...randomEx,
         reps: progressedReps,
@@ -55,10 +61,30 @@ export const generateDailyMission = (level: number, getTranslation: (key: string
   const levelMultiplier = 1 + (level - 1) * 0.1;
   const difficultyMultiplier = 1 + difficulty * 0.5;
 
+  // Select a mission title based on the exercise types
+  const missionTitles = [
+    'Daily Training Challenge',
+    'Push Your Limits',
+    'Core Strength Builder',
+    'Endurance Test',
+    'Full Body Circuit'
+  ];
+  const randomTitleIndex = Math.floor(Math.random() * missionTitles.length);
+  const missionTitle = missionTitles[randomTitleIndex];
+
+  // Use one of our motivational quotes that will be translated
+  const systemQuotes = [
+    'Your strength is not just in your muscles, but in your determination to push beyond limits.',
+    'Every rep brings you closer to your potential. Push harder, achieve more.',
+    'The master of physical training understands that consistency creates power.'
+  ];
+  const randomQuoteIndex = Math.floor(Math.random() * systemQuotes.length);
+  const motivationalQuote = systemQuotes[randomQuoteIndex];
+
   return {
     id: Date.now(),
-    title: getTranslation('mission.title'),
-    description: quotes[Math.floor(Math.random() * quotes.length)],
+    title: missionTitle,
+    description: motivationalQuote,
     exercises: selectedExercises.slice(0, 6),
     difficulty,
     experienceReward: Math.floor(baseReward * levelMultiplier * difficultyMultiplier),

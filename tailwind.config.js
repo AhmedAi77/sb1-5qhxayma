@@ -16,6 +16,19 @@ export default {
       },
       screens: {
         'xs': '375px',
+        'sm': '640px',
+        'md': '768px',
+        'lg': '1024px',
+        'xl': '1280px',
+        '2xl': '1536px',
+        'portrait': {'raw': '(orientation: portrait)'},
+        'landscape': {'raw': '(orientation: landscape)'},
+        'touch': {'raw': '(hover: none) and (pointer: coarse)'},
+        'stylus': {'raw': '(hover: none) and (pointer: fine)'},
+        'mouse': {'raw': '(hover: hover) and (pointer: fine)'},
+        'iphone-se': {'raw': '(device-width: 375px) and (device-height: 667px)'},
+        'iphone-x': {'raw': '(device-width: 375px) and (device-height: 812px)'},
+        'iphone-xr': {'raw': '(device-width: 414px) and (device-height: 896px)'},
       },
       spacing: {
         'safe-top': 'env(safe-area-inset-top)',
@@ -25,6 +38,16 @@ export default {
       },
       minHeight: {
         'screen-dvh': '100dvh',
+      },
+      height: {
+        'screen-dvh': '100dvh',
+        'screen-svh': '100svh',
+        'screen-lvh': '100lvh',
+      },
+      width: {
+        'screen-dvw': '100dvw',
+        'screen-svw': '100svw',
+        'screen-lvw': '100lvw',
       },
       animation: {
         'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
@@ -39,6 +62,9 @@ export default {
       boxShadow: {
         'glow': '0 0 15px rgba(202, 138, 4, 0.3)',
         'glow-lg': '0 0 30px rgba(202, 138, 4, 0.4)',
+      },
+      touchAction: {
+        'manipulation': 'manipulation',
       }
     },
   },

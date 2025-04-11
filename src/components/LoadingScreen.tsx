@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Zap } from 'lucide-react';
+import { Dumbbell, Trophy, ArrowUp, Volume2 } from 'lucide-react';
+import { sounds, initSoundEffects, unlockAudio } from '../lib/soundManager';
 
 interface Props {
   onComplete: () => void;
@@ -8,34 +9,75 @@ interface Props {
 
 export function LoadingScreen({ onComplete }: Props) {
   const [isVisible, setIsVisible] = useState(true);
-  const [imageLoaded, setImageLoaded] = useState(false);
-  const [loadingProgress, setLoadingProgress] = useState(0);
+  const [progress, setProgress] = useState(0);
+  const [soundsReady, setSoundsReady] = useState(false);
+
+  // Function to test sound effects
+  const playSoundEffect = () => {
+    sounds.click();
+    setTimeout(() => sounds.system(), 200);
+    setSoundsReady(true);
+  };
 
   useEffect(() => {
-    // Preload the art image
-    const img = new Image();
-    img.src = '/solo-leveling-art.jpg';
-    img.onload = () => setImageLoaded(true);
-
-    // Simulate loading progress
+    // Initialize sound effects first
+    initSoundEffects();
+    
+    // Make sure audio is unlocked
+    unlockAudio();
+    
+    // Play loading sound with loop - try multiple times with increasing volume
+    let attempts = 0;
+    const tryPlaySound = () => {
+      if (attempts < 3) {
+        attempts++;
+        // Try with increasing volume each attempt
+        sounds.loading({ loop: true, volume: 0.2 + (attempts * 0.1) });
+        setSoundsReady(true);
+      }
+    };
+    
+    setTimeout(tryPlaySound, 100);
+    setTimeout(tryPlaySound, 300);
+    setTimeout(tryPlaySound, 600);
+    
+    // Simulate loading with a smooth progress bar
     const interval = setInterval(() => {
-      setLoadingProgress(prev => {
-        const next = prev + (Math.random() * 15);
+      setProgress(prev => {
+        const increment = 4 + Math.random() * 10;
+        const next = prev + increment;
+        
+        // Play system sound when reaching certain progress points
+        if (next >= 25 && prev < 25 && soundsReady) {
+          sounds.click();
+        }
+        if (next >= 50 && prev < 50 && soundsReady) {
+          sounds.system();
+        }
+        if (next >= 75 && prev < 75 && soundsReady) {
+          sounds.click();
+        }
+        if (next >= 100 && prev < 100 && soundsReady) {
+          sounds.success();
+        }
+        
         return next > 100 ? 100 : next;
       });
-    }, 200);
+    }, 150);
 
-    // Show loading screen for 2.5 seconds
+    // Show loading screen for a shorter time - 1.5 seconds
     const timer = setTimeout(() => {
       setIsVisible(false);
-      setTimeout(onComplete, 500); // Wait for exit animation
-    }, 2500);
+      sounds.stopLoading(); // Stop loading sound
+      setTimeout(onComplete, 300); // Faster exit animation
+    }, 1500);
 
     return () => {
       clearTimeout(timer);
       clearInterval(interval);
+      sounds.stopLoading(); // Ensure sound stops when component unmounts
     };
-  }, [onComplete]);
+  }, [onComplete, soundsReady]);
 
   return (
     <AnimatePresence>
@@ -44,243 +86,163 @@ export function LoadingScreen({ onComplete }: Props) {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          transition={{ duration: 0.5 }}
-          className="fixed inset-0 bg-[#070412] z-50 flex items-center justify-center p-8 overflow-hidden"
+          transition={{ duration: 0.3 }}
+          className="fixed inset-0 bg-dark z-50 flex flex-col items-center justify-center p-4"
         >
-          {/* Background elements */}
-          <div className="absolute inset-0 bg-gradient-to-br from-[#2D1B4E]/30 via-[#070412] to-[#4C1D95]/30" />
-          
-          {/* Animated particles */}
-          {Array.from({ length: 20 }).map((_, i) => (
-            <div 
-              key={`particle-${i}`} 
-              className={`particle ${i % 2 === 0 ? 'particle-cyan' : ''}`}
-              style={{
-                '--left': `${Math.random() * 100}%`,
-                '--duration': `${10 + Math.random() * 8}s`,
-                '--delay': `${Math.random() * 2}s`,
-                '--opacity': `${0.2 + Math.random() * 0.3}`,
-              } as React.CSSProperties}
-            />
-          ))}
-          
-          {/* Stars effect */}
-          {Array.from({ length: 30 }).map((_, i) => (
-            <div 
-              key={`star-${i}`} 
-              className="star"
-              style={{
-                '--top': `${Math.random() * 100}%`,
-                '--left': `${Math.random() * 100}%`,
-                '--duration': `${2 + Math.random() * 3}s`,
-                '--delay': `${Math.random() * 2}s`,
-                '--opacity': `${0.2 + Math.random() * 0.3}`,
-                '--opacity-bright': `${0.7 + Math.random() * 0.3}`,
-                '--size': `${1 + Math.random() * 1.5}px`,
-              } as React.CSSProperties}
-            />
-          ))}
-          
-          {/* Scanning line */}
-          <div className="scanning-line" />
-          
-          {/* Glow effects */}
-          <div className="absolute top-1/4 left-1/4 w-64 h-64 bg-[#2D1B4E]/20 rounded-full blur-[100px] animate-pulse-slow" />
-          <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-[#4C1D95]/20 rounded-full blur-[100px] animate-pulse-slow delay-1000" />
-          
-          <motion.div
-            initial={{ scale: 0.8, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            exit={{ scale: 0.9, opacity: 0 }}
-            transition={{ duration: 0.5, delay: 0.2 }}
-            className="relative w-full max-w-lg mx-auto flex flex-col items-center justify-center gap-8"
+          {/* Sound indicator button */}
+          <motion.div 
+            className="absolute top-4 right-4 z-10 flex items-center gap-2 bg-purple-900/30 backdrop-blur-sm px-3 py-1 rounded-md cursor-pointer"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.3 }}
+            onClick={playSoundEffect}
           >
+            <Volume2 size={16} className="text-purple-300" />
+            <span className="text-purple-300 text-xs">
+              {soundsReady ? 'Sound On' : 'Click for Sound'}
+            </span>
+          </motion.div>
+          
+          {/* Background subtle art elements - NO glitch effects */}
+          <div className="absolute inset-0 overflow-hidden">
+            {/* Power level circles */}
+            <motion.div 
+              className="absolute top-1/4 left-1/4 w-60 h-60 bg-purple-500/5 rounded-full blur-3xl"
+              animate={{ scale: [1, 1.1, 1], opacity: [0.3, 0.5, 0.3] }}
+              transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
+            />
+            <motion.div 
+              className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-cyan-500/5 rounded-full blur-3xl"
+              animate={{ scale: [1.1, 1, 1.1], opacity: [0.3, 0.5, 0.3] }}
+              transition={{ duration: 5, repeat: Infinity, ease: "easeInOut" }}
+            />
+            
+            {/* Smooth animations instead of glitchy ones */}
             <motion.div
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              transition={{ duration: 0.5 }}
-              className="flex flex-col items-center"
-            >
-              {imageLoaded && (
-                <motion.div
-                  className="w-64 h-64 mb-8 relative overflow-hidden rounded-lg shadow-2xl"
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.5, delay: 0.3 }}
-                >
-                  <img
-                    src="/solo-leveling-art.jpg"
-                    alt="Solo Leveling Art"
-                    className="w-full h-full object-cover transform scale-105 hover:scale-110 transition-transform duration-500"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-[#070412] via-transparent to-transparent opacity-80" />
-                  <div className="absolute inset-0 bg-gradient-to-b from-[#070412]/50 via-transparent to-transparent" />
-                  
-                  {/* Dynamic data streams overlay */}
-                  {Array.from({ length: 5 }).map((_, i) => (
-                    <div 
-                      key={`data-stream-overlay-${i}`} 
-                      className="data-stream absolute"
-                      style={{
-                        '--left': `${10 + (i * 20)}%`,
-                        '--duration': `${3 + Math.random() * 2}s`,
-                        '--delay': `${Math.random() * 2}s`,
-                        '--opacity': `${0.2 + Math.random() * 0.2}`,
-                      } as React.CSSProperties}
-                    />
-                  ))}
-                </motion.div>
-              )}
-              
+              className="absolute inset-x-0 top-[20%] h-[1px] bg-purple-400/20"
+              animate={{ scaleX: [0, 1, 0], opacity: [0, 0.6, 0] }}
+              transition={{ duration: 3, repeat: Infinity, repeatDelay: 2 }}
+            />
+            
+            <motion.div
+              className="absolute inset-x-0 bottom-[30%] h-[1px] bg-cyan-400/20"
+              animate={{ scaleX: [0, 1, 0], opacity: [0, 0.6, 0] }}
+              transition={{ duration: 3, repeat: Infinity, repeatDelay: 2, delay: 1.5 }}
+            />
+            
+            {/* Subtle floating particles */}
+            {[...Array(8)].map((_, i) => (
               <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.3 }}
-                className="relative"
-              >
-                <div className="flex flex-col items-center">
-                  <motion.div className="mb-3 relative"
-                    initial={{ scale: 0.9 }}
-                    animate={{ scale: 1 }}
-                    transition={{ duration: 0.5 }}
-                  >
-                    <div className="w-20 h-20 relative">
-                      {/* Improved system logo with circuit patterns */}
-                      <svg viewBox="0 0 24 24" className="w-full h-full" style={{ filter: "drop-shadow(0 0 8px rgba(79,209,219,0.4))" }}>
-                        <defs>
-                          <linearGradient id="logoGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                            <stop offset="0%" stopColor="rgba(79,209,219,0.9)" />
-                            <stop offset="100%" stopColor="rgba(234,179,8,0.9)" />
-                          </linearGradient>
-                        </defs>
-                        
-                        {/* Outer circle */}
-                        <motion.circle 
-                          cx="12" 
-                          cy="12" 
-                          r="10" 
-                          fill="none" 
-                          stroke="url(#logoGradient)" 
-                          strokeWidth="0.5"
-                          initial={{ pathLength: 0 }}
-                          animate={{ pathLength: 1 }}
-                          transition={{ duration: 1.2, delay: 0.3, ease: "easeInOut" }}
-                        />
-                        
-                        {/* Power symbol */}
-                        <motion.path
-                          d="M12 7v5M7.5 10a4.5 4.5 0 1 0 9 0"
-                          stroke="url(#logoGradient)"
-                          strokeWidth="1.5"
-                          strokeLinecap="round"
-                          fill="none"
-                          initial={{ pathLength: 0 }}
-                          animate={{ pathLength: 1 }}
-                          transition={{ duration: 1.5, delay: 0.8, ease: "easeInOut" }}
-                        />
-                        
-                        {/* Circuit details */}
-                        <motion.path
-                          d="M4 14l2 2M20 14l-2 2M12 19v2"
-                          stroke="rgba(79,209,219,0.7)"
-                          strokeWidth="0.5"
-                          strokeLinecap="round"
-                          initial={{ pathLength: 0, opacity: 0 }}
-                          animate={{ pathLength: 1, opacity: 1 }}
-                          transition={{ duration: 1, delay: 1.3, ease: "easeInOut" }}
-                        />
-                      </svg>
-                      
-                      {/* Digital circuit indicators */}
-                      <motion.div 
-                        className="absolute inset-0"
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        transition={{ duration: 0.5, delay: 1.5 }}
-                      >
-                        <div className="absolute top-1/4 left-0 w-1 h-1 rounded-full bg-cyan-400/70 animate-pulse-slow" />
-                        <div className="absolute top-0 right-1/4 w-1 h-1 rounded-full bg-yellow-500/70 animate-flicker" />
-                        <div className="absolute bottom-0 left-1/3 w-1 h-1 rounded-full bg-cyan-400/70 animate-flicker-delay" />
-                        <div className="absolute right-0 top-2/3 w-1 h-1 rounded-full bg-yellow-500/70 animate-pulse-slow" />
-                      </motion.div>
-                    </div>
-                  </motion.div>
-                  
-                  <div className="relative text-center">
-                    <motion.div
-                      initial={{ scaleX: 0 }}
-                      animate={{ scaleX: 1 }}
-                      transition={{ duration: 0.6, delay: 1.2 }}
-                      className="h-0.5 bg-gradient-to-r from-transparent via-cyan-400/70 to-transparent w-40 mx-auto mb-4"
-                    />
-                    
-                    <motion.div
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      transition={{ duration: 0.4, delay: 1.4 }}
-                      className="text-base font-mono text-cyan-400/90 uppercase tracking-wider font-bold mb-2"
-                      style={{ textShadow: "0 0 10px rgba(79,209,219,0.6)" }}
-                    >
-                      SYSTEM LOADING
-                    </motion.div>
-                    
-                    <motion.div
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: [0, 1, 0] }}
-                      transition={{ 
-                        duration: 2, 
-                        delay: 1.8,
-                        repeat: Infinity,
-                        repeatType: "loop"
-                      }}
-                      className="flex items-center justify-center gap-2 text-sm font-mono text-cyan-400/90"
-                      style={{ textShadow: "0 0 8px rgba(79,209,219,0.4)" }}
-                    >
-                      <span className="inline-block w-1.5 h-1.5 bg-cyan-400/90 rounded-full animate-pulse-slow" />
-                      <span>INITIALIZING TRAINING PROTOCOLS</span>
-                      <span className="inline-block w-1.5 h-1.5 bg-cyan-400/90 rounded-full animate-flicker-delay" />
-                    </motion.div>
-                    
-                    <motion.div
-                      initial={{ scaleX: 0 }}
-                      animate={{ scaleX: 1 }}
-                      transition={{ duration: 0.6, delay: 2.0 }}
-                      className="h-0.5 bg-gradient-to-r from-transparent via-cyan-400/50 to-transparent w-64 mx-auto mt-4"
-                    />
-                  </div>
-                </div>
-              </motion.div>
-            </motion.div>
-
-            {/* Loading indicator */}
-            <div className="flex flex-col items-center gap-3 w-full max-w-xs">
-              <div className="progress-bg w-full h-2">
-                <motion.div
-                  initial={{ width: "0%" }}
-                  animate={{ width: `${loadingProgress}%` }}
-                  className="progress-animate h-full"
-                />
-              </div>
-              
-              <div className="flex items-center justify-between w-full text-sm text-purple-300/80">
-                <span>INITIALIZING</span>
-                <span>{Math.floor(loadingProgress)}%</span>
-              </div>
-              
-              <motion.div
+                key={`particle-${i}`}
+                className={`absolute w-1 h-1 rounded-full ${
+                  i % 2 === 0 ? 'bg-purple-400/30' : 'bg-cyan-400/30'
+                }`}
+                style={{
+                  top: `${30 + Math.random() * 40}%`,
+                  left: `${20 + Math.random() * 60}%`,
+                }}
                 animate={{
-                  rotate: [0, 360],
+                  y: [0, -15, 0],
+                  x: [0, Math.random() * 10 - 5, 0],
+                  opacity: [0, 0.8, 0]
                 }}
                 transition={{
-                  duration: 1.5,
+                  duration: 2 + Math.random() * 2,
                   repeat: Infinity,
-                  ease: "linear"
+                  delay: Math.random() * 2
                 }}
-                className="w-10 h-10 mt-2 relative"
+              />
+            ))}
+          </div>
+
+          <motion.div
+            initial={{ y: 20, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            transition={{ duration: 0.3 }}
+            className="w-full max-w-sm flex flex-col items-center gap-6 relative z-10"
+          >
+            {/* Modern training app logo */}
+            <div className="relative mb-2">
+              <motion.div
+                className="w-20 h-20 flex items-center justify-center relative"
               >
-                <div className="absolute inset-0 border-2 border-t-yellow-500/90 border-r-yellow-500/60 border-b-yellow-500/30 border-l-yellow-500/10 rounded-full" />
-                <div className="absolute inset-2 border border-t-cyan-400/80 border-r-cyan-400/50 border-b-cyan-400/20 border-l-cyan-400/10 rounded-full" />
+                {/* Animated background circle */}
+                <motion.div 
+                  className="absolute inset-0 rounded-full bg-gradient-to-r from-purple-600/20 to-cyan-500/20"
+                  animate={{ 
+                    boxShadow: [
+                      "0 0 10px rgba(124, 58, 237, 0.2)", 
+                      "0 0 20px rgba(124, 58, 237, 0.4)", 
+                      "0 0 10px rgba(124, 58, 237, 0.2)"
+                    ]
+                  }}
+                  transition={{ duration: 2, repeat: Infinity }}
+                />
+                
+                {/* Ring effect */}
+                <motion.div
+                  className="absolute inset-0 rounded-full border-2 border-purple-500/20"
+                  animate={{ scale: [1, 1.3, 1], opacity: [0.8, 0, 0.8] }}
+                  transition={{ duration: 3, repeat: Infinity }}
+                />
+                
+                {/* Dumbbell icon with pulsing animation */}
+                <motion.div
+                  animate={{ 
+                    scale: [1, 1.1, 1],
+                    y: [0, -2, 0]
+                  }}
+                  transition={{ 
+                    duration: 1.5,
+                    repeat: Infinity,
+                    repeatType: "loop"
+                  }}
+                  className="relative"
+                >
+                  <Dumbbell size={36} className="text-cyan-400" />
+                </motion.div>
+                
+                {/* Trophy mini icon for gamification */}
+                <motion.div
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1 }}
+                  transition={{ delay: 0.5, duration: 0.3, type: "spring" }}
+                  className="absolute -top-1 -right-1 bg-gradient-to-br from-yellow-400 to-yellow-600 rounded-full p-1.5 shadow-lg"
+                >
+                  <Trophy size={14} className="text-dark" />
+                </motion.div>
+                
+                {/* Level up indicator */}
+                <motion.div
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1 }}
+                  transition={{ delay: 0.7, duration: 0.3, type: "spring" }}
+                  className="absolute -bottom-1 -right-1 bg-gradient-to-br from-green-400 to-green-600 rounded-full p-1.5 shadow-lg"
+                >
+                  <ArrowUp size={14} className="text-dark" />
+                </motion.div>
               </motion.div>
+            </div>
+            
+            {/* Loading text */}
+            <motion.div 
+              className="uppercase text-sm tracking-widest font-bold text-purple-200 font-display"
+              animate={{ opacity: [0.7, 1, 0.7] }}
+              transition={{ duration: 2, repeat: Infinity }}
+            >
+              Preparing Your Training
+            </motion.div>
+            
+            {/* Simple progress bar */}
+            <div className="w-full max-w-xs h-1.5 bg-purple-900/30 rounded-full overflow-hidden">
+              <motion.div 
+                className="h-full bg-gradient-to-r from-purple-500 via-cyan-400 to-purple-500 bg-size-200 animate-shine rounded-full"
+                style={{ 
+                  width: `${progress}%`,
+                  backgroundSize: "200% 100%"
+                }}
+                transition={{ ease: "easeOut" }}
+              />
             </div>
           </motion.div>
         </motion.div>

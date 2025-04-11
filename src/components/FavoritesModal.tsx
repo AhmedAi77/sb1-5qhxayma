@@ -106,7 +106,7 @@ export function FavoritesModal({ favorites, onRemove, onClose, playClick, playHo
             <div className="w-8 h-8 bg-purple-600/30 rounded-lg flex items-center justify-center">
               <Star className="w-5 h-5 text-purple-400" />
             </div>
-            <h2 className="text-xl font-display text-cyan-400 drop-shadow-sm">Favorites</h2>
+            <h2 className="text-xl font-display text-cyan-400 drop-shadow-sm">{t('favorites.title')}</h2>
           </div>
           <button
             onClick={onClose}
@@ -138,9 +138,13 @@ export function FavoritesModal({ favorites, onRemove, onClose, playClick, playHo
                   <div className="flex-1">
                     <h4 className="font-bold text-cyan-400 drop-shadow-sm">{favorite.type}</h4>
                     <p className="text-sm text-purple-200">
-                      {favorite.sets} x {favorite.reps} reps
-                      {favorite.distance && ` • ${favorite.distance}m`}
+                      <span className="text-cyan-300">{t('favorites.best')}:</span> {favorite.personalBest} {t('mission.reps')}
                     </p>
+                    {favorite.lastPerformed && (
+                      <p className="text-xs text-purple-300/70 mt-1">
+                        {t('favorites.timesPerformed')}: {favorite.timesPerformed}
+                      </p>
+                    )}
                   </div>
                   <button
                     onClick={() => {
@@ -149,6 +153,7 @@ export function FavoritesModal({ favorites, onRemove, onClose, playClick, playHo
                     }}
                     onMouseEnter={() => playHover?.()}
                     className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+                    title={t('favorites.remove')}
                   >
                     <Trash2 className="w-4 h-4 text-red-400" />
                   </button>
@@ -160,9 +165,9 @@ export function FavoritesModal({ favorites, onRemove, onClose, playClick, playHo
               <div className="w-16 h-16 mx-auto bg-purple-600/10 rounded-full flex items-center justify-center mb-4">
                 <Star className="w-8 h-8 text-purple-400/50" />
               </div>
-              <p className="text-purple-200/70 mb-2">No favorite exercises yet</p>
+              <p className="text-purple-200/70 mb-2">{t('favorites.empty')}</p>
               <p className="text-purple-200/50 text-sm max-w-xs mx-auto">
-                Click the star icon on exercises you like to add them to your favorites
+                {t('favorites.emptyMessage')}
               </p>
             </div>
           )}

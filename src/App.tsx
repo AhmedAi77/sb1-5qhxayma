@@ -2,17 +2,19 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Dumbbell, Trophy, ArrowUp, User as UserIcon, Star, Activity, Check,
-  LucideIcon, Heart, Flame, StretchVertical, MoveRight, Footprints, GraduationCap
+  LucideIcon, Heart, Flame, StretchVertical, MoveRight, Footprints, GraduationCap,
+  Zap
 } from 'lucide-react';
 import { Toaster, toast } from 'react-hot-toast';
-import useSound from 'use-sound';
 import { 
   FavoritesModal, 
   StatsModal,
   LanguageToggle,
   NameDialog,
   LoadingScreen,
-  SplashScreen
+  SplashScreen,
+  BackgroundMusic,
+  MuteButton
 } from './components';
 import { useLanguage } from './contexts/LanguageContext';
 import type { User, Mission, Exercise } from './types';
@@ -23,8 +25,17 @@ import {
   generateDailyMission, 
   calculateRequiredExp,
   toggleFavorite as toggleFavoriteExercise, 
-  createNewUser
+  createNewUser,
+  saveMission,
+  loadMission
 } from './lib';
+import { 
+  initSoundEffects, 
+  sounds, 
+  toggleMuteSounds, 
+  unlockAudio 
+} from './lib/soundManager';
+import analytics from './lib/analytics';
 
 const getExerciseIcon = (type: string): LucideIcon => {
   const icons: Record<string, LucideIcon> = {
@@ -49,13 +60,25 @@ const getExerciseIcon = (type: string): LucideIcon => {
 
 // Function to add highlight spans to important words in a quote
 const formatQuote = (quote: string): React.ReactNode => {
-  // Words that should be highlighted
-  const highlightWords = [
+  const { language } = useLanguage();
+  
+  // Words that should be highlighted in English
+  const enHighlightWords = [
     'strength', 'power', 'progress', 'success', 'master', 'achieve', 
     'victory', 'overcome', 'potential', 'limits', 'push', 'challenge',
     'exceed', 'tomorrow', 'future', 'destiny', 'energy', 'focus',
     'discipline', 'determination', 'consistency', 'training'
   ];
+  
+  // Words that should be highlighted in Arabic
+  const arHighlightWords = [
+    'قوة', 'قوتك', 'تقدم', 'نجاح', 'سيد', 'حقق', 'تحقق', 'تجاوز',
+    'إمكانات', 'حدود', 'اضغط', 'تحدي', 'تجاوز', 'غداً', 'مستقبل',
+    'مصير', 'طاقة', 'تركيز', 'انضباط', 'إصرار', 'استمرارية', 'تدريب'
+  ];
+  
+  // Choose the right highlight words based on language
+  const highlightWords = language === 'en' ? enHighlightWords : arHighlightWords;
   
   // Split the quote into words
   const words = quote.split(' ');
@@ -347,7 +370,7 @@ function SparksEffect() {
 }
 
 function App() {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const [user, setUser] = useState<User | null>(null);
   const [dailyMission, setDailyMission] = useState<Mission | null>(null);
   const [showWelcome, setShowWelcome] = useState(false);
@@ -356,34 +379,116 @@ function App() {
   const [showStats, setShowStats] = useState(false);
   const [showSplash, setShowSplash] = useState(true);
   const [showLoading, setShowLoading] = useState(false);
+  const [xpAnimating, setXpAnimating] = useState(false);
+  const [isTouchDevice, setIsTouchDevice] = useState(false);
   
-  const [playClick] = useSound('/sounds/click.mp3', { 
-    volume: 0.4,
-    preload: true,
-    interrupt: true
-  });
-  const [playSuccess] = useSound('/sounds/success.mp3', { 
-    volume: 0.5,
-    preload: true 
-  });
-  const [playLevelUp] = useSound('/sounds/levelup.mp3', { 
-    volume: 0.6,
-    preload: true 
-  });
-  const [playHover] = useSound('/sounds/click.mp3', { 
-    volume: 0.2,
-    preload: true,
-    interrupt: true 
-  });
+  // Update sound functions to use our sound manager
+  const playClick = () => {
+    sounds.click();
+  };
+  
+  const playSuccess = () => {
+    sounds.success();
+  };
+  
+  const playLevelUp = () => {
+    sounds.levelUp();
+    
+    // Track level up in analytics
+    analytics.trackLevelUp(user?.level || 0, user?.experience || 0);
+  };
+  
+  const playHover = () => {
+    sounds.click();
+  };
+  
+  // Initialize sounds immediately when component mounts
+  useEffect(() => {
+    // Initialize sound effects as early as possible
+    initSoundEffects();
+    
+    // Force unlock audio
+    unlockAudio();
+    
+    // Try to play a sound immediately
+    setTimeout(() => {
+      sounds.click();
+    }, 500);
+    
+    // Make sure to save data before closing
+    const handleBeforeUnload = () => {
+      if (user) saveUser(user);
+      if (dailyMission) saveMission(dailyMission);
+    };
+    
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, []);
+
+  // Detect touch device
+  useEffect(() => {
+    const detectTouch = () => {
+      setIsTouchDevice(
+        'ontouchstart' in window || 
+        navigator.maxTouchPoints > 0 || 
+        (navigator as any).msMaxTouchPoints > 0
+      );
+    };
+    
+    detectTouch();
+    window.addEventListener('touchstart', () => setIsTouchDevice(true), { once: true });
+    
+    return () => {
+      window.removeEventListener('touchstart', () => setIsTouchDevice(true));
+    };
+  }, []);
+
+  // Prevent elastic scrolling on iOS
+  useEffect(() => {
+    const preventPullToRefresh = (e: TouchEvent) => {
+      // Prevent only if at the top of the page and pulling down
+      if (document.scrollingElement!.scrollTop === 0 && e.touches[0].clientY > 0) {
+        e.preventDefault();
+      }
+    };
+
+    document.addEventListener('touchmove', preventPullToRefresh, { passive: false });
+    
+    return () => {
+      document.removeEventListener('touchmove', preventPullToRefresh);
+    };
+  }, []);
 
   useEffect(() => {
     // Load saved user data if it exists
     const savedUser = loadUser();
     if (savedUser) {
       setUser(savedUser);
-      setDailyMission(generateDailyMission(savedUser.level, t));
+      
+      // Try to load saved mission first
+      const savedMission = loadMission();
+      
+      if (savedMission) {
+        console.log('Loaded saved mission:', savedMission);
+        setDailyMission(savedMission);
+      } else {
+        // Generate new mission if no saved mission exists
+        setDailyMission(generateDailyMission(savedUser.level, t));
+      }
     }
   }, [t]);
+
+  // Generate a new daily mission if we don't have one
+  useEffect(() => {
+    if (user && !dailyMission) {
+      const newMission = generateDailyMission(user.level, t);
+      setDailyMission(newMission);
+      saveMission(newMission); // Save the new mission
+    }
+  }, [user, dailyMission, t]);
 
   const handleNameSubmit = (name: string) => {
     // Check if user already exists
@@ -400,35 +505,70 @@ function App() {
       saveUser(newUser);
       setDailyMission(generateDailyMission(1, t));
       setShowWelcome(true);
-      playSuccess();
     }
   };
 
   const handleToggleFavorite = (exercise: Exercise) => {
-    toggleFavoriteExercise(user, exercise, setUser);
+    if (!user) return;
+    
+    const updatedUser = toggleFavoriteExercise(user, exercise.id);
+    setUser(updatedUser);
+    saveUser(updatedUser);
+    
+    const isFavorited = updatedUser.favorites.includes(exercise.id);
+    
+    // Track favorite toggle in analytics
+    analytics.trackEvent('favorite_toggle', {
+      exercise_id: exercise.id,
+      exercise_name: exercise.name,
+      is_favorited: isFavorited
+    });
+    
+    sounds.click();
+    
+    toast(
+      `${exercise.name} ${
+        isFavorited
+          ? t.addedToFavorites
+          : t.removedFromFavorites
+      }`,
+      {
+        icon: isFavorited ? '⭐' : '✖️',
+        position: language === 'ar' ? 'top-left' : 'top-right',
+      }
+    );
   };
 
   const handleExerciseComplete = async (index: number) => {
     if (!dailyMission || !user || !user.stats || processingExercise !== null) return;
 
+    // Set processing state immediately for visual feedback
     setProcessingExercise(index);
     
     try {
+      // Play click sound effect immediately
       playClick();
       
       const exercise = dailyMission.exercises[index];
       
-      // Create a new array with the updated exercise
+      // Create a new array with the updated exercise - do this immediately
       const updatedExercises = dailyMission.exercises.map((ex, i) => 
         i === index ? { ...ex, completed: true } : ex
       );
 
-      // Update mission state immediately
-      setDailyMission(prevMission => ({
-        ...prevMission!,
+      // Update mission state immediately for instant UI feedback
+      const updatedMission = {
+        ...dailyMission,
         exercises: updatedExercises,
         completed: updatedExercises.every(ex => ex.completed)
-      }));
+      };
+      setDailyMission(updatedMission);
+      saveMission(updatedMission); // Save mission state immediately
+
+      // Trigger XP animation
+      setXpAnimating(true);
+      // Reset animation state after animation completes
+      setTimeout(() => setXpAnimating(false), 1500);
 
       // Update user stats
       const updatedStats = {
@@ -455,13 +595,29 @@ function App() {
         ]
       };
 
+      // Show XP gained toast
+      const xpGained = Math.floor(10 + Math.random() * 5); // Small XP gain for each exercise
+      toast.success(`+${xpGained} XP`, {
+        icon: '⚡',
+        duration: 2000,
+        style: {
+          background: 'rgba(15, 7, 40, 0.95)',
+          color: '#4FD1DB',
+          border: '1px solid rgba(79, 209, 219, 0.5)',
+          borderRadius: '0.75rem',
+          padding: '0.75rem 1rem',
+          fontWeight: 'bold',
+          boxShadow: '0 0 20px rgba(79, 209, 219, 0.4), inset 0 0 10px rgba(79, 209, 219, 0.1)'
+        }
+      });
+
       // Check if all exercises are completed
       const allCompleted = updatedExercises.every(ex => ex.completed);
 
       if (allCompleted && !dailyMission.completed) {
-        await new Promise(resolve => setTimeout(resolve, 300));
+        // Play success sound immediately
         playSuccess();
-
+        
         // Display toast notification for completing mission
         toast.success(t('mission.completed'), {
           icon: '🏆',
@@ -482,10 +638,10 @@ function App() {
         let remainingExp = newExperience;
 
         if (newExperience >= experienceNeeded) {
-          await new Promise(resolve => setTimeout(resolve, 500));
-          playLevelUp();
           newLevel++;
           remainingExp = newExperience - experienceNeeded;
+          // Play level up sound immediately
+          playLevelUp();
           toast.success(`${t('level.up')} ${newLevel}!`, {
             icon: '⬆️',
             duration: 4000,
@@ -512,10 +668,16 @@ function App() {
         setUser(updatedUser);
         saveUser(updatedUser);
 
-        // Generate new mission after a delay
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        setDailyMission(generateDailyMission(newLevel, t));
+        // Generate new mission - reduced delay
+        setTimeout(() => {
+          const newMission = generateDailyMission(newLevel, t);
+          setDailyMission(newMission);
+          saveMission(newMission); // Save the new mission
+        }, 500);
       } else {
+        // Play success sound for individual exercise
+        playSuccess();
+        
         // Show completion toast for individual exercise
         toast.success(t('exercise.completed'), {
           icon: '✅',
@@ -529,6 +691,13 @@ function App() {
           }
         });
         
+        // Save the updated mission state
+        const updatedMission = {
+          ...dailyMission,
+          exercises: updatedExercises
+        };
+        saveMission(updatedMission);
+        
         // Update user stats only
         const updatedUser = {
           ...user,
@@ -541,14 +710,47 @@ function App() {
       console.error('Error completing exercise:', error);
       toast.error('Failed to complete exercise');
     } finally {
-      await new Promise(resolve => setTimeout(resolve, 300));
-      setProcessingExercise(null);
+      // Reset processing state with minimal delay
+      setTimeout(() => setProcessingExercise(null), 100);
     }
   };
+
+  // Calculate experience progress
+  const experienceProgress = user ? (user.experience / calculateRequiredExp(user.level)) * 100 : 0;
+
+  // Add a save interval for user data as a safety measure
+  useEffect(() => {
+    // Auto-save user data every 60 seconds if there are changes
+    if (user) {
+      const autoSaveInterval = setInterval(() => {
+        console.log('Auto-saving user data...');
+        saveUser(user);
+      }, 60000); // 60 seconds
+      
+      return () => {
+        clearInterval(autoSaveInterval);
+      };
+    }
+  }, [user]);
+
+  useEffect(() => {
+    // Track app initialization
+    analytics.trackEvent('app_initialized', {
+      timestamp: new Date().toISOString(),
+      language: window.navigator.language
+    });
+  }, []);
 
   if (!user) {
     return (
       <>
+        <BackgroundMusic 
+          audioSrc="/sounds/Solo Leveling S1 Soundtrack Collection  俺だけレベルアップな件 OST Cover Compilation (mp3cut.net).mp3"
+          volume={0.2}
+        />
+        <div className="fixed top-4 right-4 z-50">
+          <MuteButton />
+        </div>
         {showSplash && (
           <SplashScreen onComplete={() => {
             setShowSplash(false);
@@ -559,18 +761,29 @@ function App() {
           <LoadingScreen onComplete={() => setShowLoading(false)} />
         )}
         {!showSplash && !showLoading && (
-      <NameDialog
-        onSubmit={handleNameSubmit}
-        playClick={playClick}
-        playHover={playHover}
-      />
+          <NameDialog
+            onSubmit={handleNameSubmit}
+            playClick={playClick}
+            playHover={playHover}
+          />
         )}
       </>
     );
   }
 
   return (
-    <div className="relative min-h-screen text-white bg-gradient-to-br from-[#070412] via-[#0a0215] to-[#0f0421] overflow-x-hidden">
+    <div 
+      className={`min-h-screen min-h-screen-dvh flex flex-col bg-dark relative overflow-hidden ios-safe-bottom ${isTouchDevice ? 'touch-device' : ''}`}
+      dir={language === 'ar' ? 'rtl' : 'ltr'}
+    >
+      <BackgroundMusic 
+        audioSrc="/sounds/Solo Leveling S1 Soundtrack Collection  俺だけレベルアップな件 OST Cover Compilation (mp3cut.net).mp3"
+        volume={0.15}
+      />
+      
+      {/* For touch devices, add iOS safe area padding */}
+      <div className="ios-safe-top"></div>
+      
       <Toaster position="top-center" />
       
       {/* Sparks Effect */}
@@ -655,7 +868,10 @@ function App() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 flex items-center justify-center z-50 bg-[#070412]/90 backdrop-blur-sm"
-            onClick={() => setShowWelcome(false)}
+            onClick={() => {
+              playClick();
+              setShowWelcome(false);
+            }}
           >
             <motion.div
               initial={{ scale: 0.9, y: 20 }}
@@ -689,9 +905,9 @@ function App() {
               <div>
                     <div className="flex items-center gap-2">
                       <h1 className="text-lg sm:text-xl font-display text-purple-300 drop-shadow-md">{user.name}</h1>
-                      <div className="flex items-center gap-1 bg-purple-600/15 px-2 py-0.5 rounded-full border border-purple-600/25">
-                        <Trophy className="text-purple-300 w-3.5 h-3.5" />
-                        <span className="text-xs text-purple-300">{t('header.level')} {user.level}</span>
+                      <div className="flex items-center gap-1 bg-purple-600/30 px-3 py-1 rounded-lg border-2 border-purple-600/40 whitespace-nowrap level-badge">
+                        <Trophy className="text-purple-300 w-4 h-4" />
+                        <span className="text-sm text-purple-300 inline-block font-semibold">{t('header.level')} {user.level}</span>
                       </div>
                     </div>
                     <p className="text-xs sm:text-sm text-purple-200/80 font-body">{t('header.hunter')}</p>
@@ -699,34 +915,52 @@ function App() {
             </div>
             
                 <div className="flex items-center gap-3">
+                  <MuteButton />
+                  
                   <motion.button
-                onClick={() => setShowStats(true)}
+                onClick={() => {
+                  playClick();
+                  setShowStats(true);
+                }}
                 onMouseEnter={() => playHover()}
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    className="header-button flex items-center justify-center gap-2 bg-purple-500/15 p-3 rounded-lg border-2 border-purple-500/30 hover:bg-purple-500/20 transition-colors min-w-[46px] min-h-[46px]"
-                  >
+                whileTap={{ scale: 0.92 }}
+                className="header-button flex items-center justify-center gap-2 bg-purple-500/30 p-3 rounded-lg border-2 border-purple-500/40 hover:bg-purple-500/40 active:bg-purple-500/50 transition-all duration-150 min-w-[46px] min-h-[46px] rtl-trophy"
+                style={{
+                  boxShadow: '0 0 12px rgba(138, 79, 219, 0.4)',
+                  transform: 'translateZ(0)'
+                }}
+              >
                     <Activity className="text-purple-300 w-5 h-5 sm:w-6 sm:h-6" />
-                    <span className="text-sm font-semibold text-purple-300 hidden sm:inline">{t('header.stats')}</span>
+                    <span className="text-sm font-bold text-purple-300 hidden sm:inline whitespace-nowrap">{t('header.stats')}</span>
                   </motion.button>
                   
                   <motion.button
-                onClick={() => setShowFavorites(true)}
+                onClick={() => {
+                  playClick();
+                  setShowFavorites(true);
+                }}
                 onMouseEnter={() => playHover()}
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    className="header-button flex items-center justify-center gap-2 bg-purple-500/15 p-3 rounded-lg border-2 border-purple-500/30 hover:bg-purple-500/20 transition-colors min-w-[46px] min-h-[46px]"
-                  >
+                whileTap={{ scale: 0.92 }}
+                className="header-button flex items-center justify-center gap-2 bg-purple-500/30 p-3 rounded-lg border-2 border-purple-500/40 hover:bg-purple-500/40 active:bg-purple-500/50 transition-all duration-150 min-w-[46px] min-h-[46px] rtl-trophy"
+                style={{
+                  boxShadow: '0 0 12px rgba(138, 79, 219, 0.4)',
+                  transform: 'translateZ(0)'
+                }}
+              >
                     <Star className="text-purple-300 w-5 h-5 sm:w-6 sm:h-6" />
-                    <span className="text-sm font-semibold text-purple-300 hidden sm:inline">{t('header.favorites')}</span>
+                    <span className="text-sm font-bold text-purple-300 hidden sm:inline whitespace-nowrap">{t('header.favorites')}</span>
                   </motion.button>
                   
                   <motion.div 
-                    whileHover={{ scale: 1.05 }}
-                    className="header-button flex items-center justify-center gap-2 bg-purple-500/15 p-3 rounded-lg border-2 border-purple-500/30 min-w-[46px] min-h-[46px]"
+                    whileTap={{ scale: 0.92 }}
+                    className="header-button flex items-center justify-center gap-2 bg-purple-500/30 p-3 rounded-lg border-2 border-purple-500/40 hover:bg-purple-500/40 active:bg-purple-500/50 transition-all duration-150 min-w-[46px] min-h-[46px] rtl-trophy trophy-counter"
+                    style={{
+                      boxShadow: '0 0 12px rgba(138, 79, 219, 0.4)',
+                      transform: 'translateZ(0)'
+                    }}
                   >
                     <Trophy className="text-purple-300 w-5 h-5 sm:w-6 sm:h-6" />
-                    <span className="text-sm font-semibold text-purple-300">{user.completedMissions}</span>
+                    <span className="text-sm font-bold text-purple-300 whitespace-nowrap">{user.completedMissions}</span>
                   </motion.div>
                 </div>
           </div>
@@ -741,23 +975,23 @@ function App() {
                 className="glass-card rounded-xl p-4 sm:p-6 border border-purple-600/30"
               >
                 <div className="flex items-center justify-between mb-4">
-                  <h3 className="system-title">System</h3>
-                  <span className="mission-section text-sm text-cyan-400 bg-purple-600/20 px-3 py-1 rounded-full border border-purple-600/30">
-                  {dailyMission.experienceReward} {t('mission.exp')}
-                </span>
-              </div>
-              
+                  <h3 className="system-title rtl-fix">{t('mission.title')}</h3>
+                  <span className="mission-section text-sm text-cyan-400 bg-purple-600/20 px-3 py-1 rounded-full border border-purple-600/30 whitespace-nowrap">
+                    {dailyMission.experienceReward} {t('mission.exp')}
+                  </span>
+                </div>
+                
                 <motion.div
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.2 }}
                 >
-                  <p className="system-quote">{formatQuote(dailyMission.description)}</p>
+                  <p className="system-quote">{formatQuote(t(dailyMission.description))}</p>
                 </motion.div>
                 
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mt-6 mb-4">
-                  <h3 className="text-base sm:text-xl font-bold font-display text-cyan-400 drop-shadow-sm">
-                    {dailyMission.title}
+                  <h3 className="text-base sm:text-xl font-bold font-display text-cyan-400 drop-shadow-sm rtl-fix whitespace-nowrap">
+                    {t(dailyMission.title)}
                   </h3>
                 </div>
                 
@@ -768,8 +1002,8 @@ function App() {
                     initial={{ x: -20, opacity: 0 }}
                     animate={{ x: 0, opacity: 1 }}
                     transition={{ delay: idx * 0.1 }}
-                      whileHover={!exercise.completed ? { x: 5 } : {}}
-                    className={`w-full exercise-card flex items-center gap-3 p-3 rounded-lg transition-all ${
+                    whileHover={!exercise.completed ? { x: 5 } : {}}
+                    className={`w-full exercise-card flex items-center gap-3 p-3 rounded-lg transition-all rtl-exercise ${
                       exercise.completed 
                           ? 'exercise-completed bg-green-900/30 border border-green-500/40' 
                           : 'glass-effect border border-purple-600/20 hover:border-purple-600/40'
@@ -788,9 +1022,9 @@ function App() {
                         })()}
                     </div>
                     
-                    <div className="flex-1 text-left">
-                      <div className="flex items-center gap-2">
-                          <h4 className="text-sm sm:text-base font-bold font-display text-cyan-400 drop-shadow-sm">
+                    <div className="flex-1 text-left rtl-text">
+                      <div className="flex items-center gap-2 rtl-flex">
+                          <h4 className="text-sm sm:text-base font-bold font-display text-cyan-400 drop-shadow-sm exercise-name">
                           {exercise.type}
                         </h4>
                         {exercise.completed && (
@@ -804,36 +1038,55 @@ function App() {
                         )}
                       </div>
                         <p className="text-xs sm:text-sm text-purple-200">
-                        {exercise.sets} x {exercise.reps} {t('mission.reps')}
-                        {exercise.distance && ` • ${exercise.distance}m`}
-                      </p>
+                          {language === 'ar' 
+                            ? `${exercise.reps} × ${exercise.sets} ${t('mission.reps')}`
+                            : `${exercise.sets} x ${exercise.reps} ${t('mission.reps')}`
+                          }
+                          {exercise.distance && ` • ${exercise.distance}m`}
+                        </p>
                     </div>
 
-                    <button
+                    <div className="relative">
+                      <button
                         onClick={() => handleToggleFavorite(exercise)}
-                      onMouseEnter={() => playHover()}
-                      className={`p-2 rounded-lg transition-colors ${
-                        user?.favorites.some(fav => fav.type === exercise.type)
-                            ? 'text-purple-400 bg-purple-600/10 hover:bg-purple-600/20'
-                            : 'text-purple-200/60 hover:text-purple-400 hover:bg-purple-600/10'
-                      }`}
-                    >
-                      <Star className="w-4 h-4 sm:w-5 sm:h-5" />
-                    </button>
+                        onMouseEnter={() => playHover()}
+                        className={`p-2 rounded-lg transition-all rtl-button ${
+                          user?.favorites.some(fav => fav.type === exercise.type)
+                            ? 'text-yellow-400 bg-purple-600/20 hover:bg-purple-600/30 active:bg-purple-600/40 active:scale-95 favorite-active'
+                            : 'text-purple-200/60 hover:text-purple-400 hover:bg-purple-600/10 active:bg-purple-600/20 active:scale-95'
+                        }`}
+                        style={{
+                          transition: 'transform 0.1s ease-out, background-color 0.2s ease, color 0.2s ease'
+                        }}
+                        title={user?.favorites.some(fav => fav.type === exercise.type) 
+                          ? t('favorites.remove') 
+                          : t('favorites.add')}
+                      >
+                        {user?.favorites.some(fav => fav.type === exercise.type) ? (
+                          <Star className="w-4 h-4 sm:w-5 sm:h-5" fill="currentColor" />
+                        ) : (
+                          <Star className="w-4 h-4 sm:w-5 sm:h-5" />
+                        )}
+                      </button>
+                    </div>
 
                     <button
                       onClick={() => !exercise.completed && handleExerciseComplete(idx)}
                       onMouseEnter={() => !exercise.completed && playHover()}
                       disabled={exercise.completed || processingExercise !== null}
-                        className={`w-10 h-10 flex items-center justify-center rounded-lg transition-colors exercise-check ${
+                      className={`w-10 h-10 flex items-center justify-center rounded-lg transition-all rtl-button ${
                         exercise.completed 
-                            ? 'bg-green-900/30 text-green-400 cursor-default' 
-                          : processingExercise === idx
-                            ? 'bg-purple-600/20 cursor-wait'
-                            : 'bg-purple-600/20 hover:bg-purple-600/30 text-purple-400 cursor-pointer'
-                        }`}
-                      >
-                        <Check className="w-4 h-4 sm:w-5 sm:h-5" />
+                          ? 'bg-green-900/30 text-green-400 cursor-default' 
+                        : processingExercise === idx
+                          ? 'bg-purple-600/40 text-purple-300 animate-pulse cursor-wait'
+                          : 'bg-purple-600/20 hover:bg-purple-600/30 active:bg-purple-600/50 active:scale-95 text-purple-400 cursor-pointer'
+                      }`}
+                      style={{
+                        transform: processingExercise === idx ? 'scale(0.95)' : 'scale(1)',
+                        transition: 'transform 0.1s ease-out, background-color 0.2s ease'
+                      }}
+                    >
+                      <Check className="w-4 h-4 sm:w-5 sm:h-5" />
                     </button>
                   </motion.div>
                 ))}
@@ -842,6 +1095,123 @@ function App() {
           )}
         </div>
         </>
+      )}
+      
+      {/* Stats Modal */}
+      <AnimatePresence>
+        {showStats && (
+          <StatsModal
+            stats={user?.stats || { totalExercises: 0, totalReps: 0, totalDistance: 0, personalBests: {}, exerciseHistory: [] }}
+            onClose={() => {
+              playClick();
+              setShowStats(false);
+            }}
+          />
+        )}
+      </AnimatePresence>
+      
+      {/* Favorites Modal */}
+      <AnimatePresence>
+        {showFavorites && (
+          <FavoritesModal
+            favorites={user?.favorites || []}
+            onRemove={(id) => {
+              playClick();
+              if (user) {
+                const updatedUser = {
+                  ...user,
+                  favorites: user.favorites.filter(fav => fav.id !== id)
+                };
+                setUser(updatedUser);
+                saveUser(updatedUser);
+              }
+            }}
+            onClose={() => {
+              playClick();
+              setShowFavorites(false);
+            }}
+          />
+        )}
+      </AnimatePresence>
+      
+      {/* Experience Progress Bar */}
+      {user && (
+        <motion.div 
+          className="fixed bottom-0 left-0 right-0 px-4 py-4 bg-black/40 xp-container z-40"
+          initial={{ y: 100 }}
+          animate={{ y: 0 }}
+          transition={{ delay: 0.5, type: 'spring', stiffness: 300, damping: 25 }}
+        >
+          <div className="container mx-auto flex items-center gap-4">
+            <div className="flex items-center justify-center w-12 h-12 rounded-full bg-purple-600/20 border border-purple-600/50 xp-icon-container">
+              <Zap className={`w-6 h-6 text-cyan-400 ${xpAnimating ? 'animate-pulse' : ''}`} />
+            </div>
+            
+            <div className="flex-1">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm text-cyan-400 font-semibold">
+                  {t('experience.level')} {user.level}
+                </span>
+                <span className="text-sm text-purple-300">
+                  {user.experience} / {calculateRequiredExp(user.level)} XP
+                </span>
+              </div>
+              
+              <div className="h-4 w-full xp-bar-container overflow-hidden relative">
+                <motion.div 
+                  className="xp-bar"
+                  initial={{ width: 0 }}
+                  animate={{ 
+                    width: `${experienceProgress}%`,
+                    transition: { duration: xpAnimating ? 0.8 : 0.3, ease: 'easeOut' }
+                  }}
+                />
+                
+                {/* Glow effect */}
+                <motion.div 
+                  className="xp-glow"
+                  initial={{ left: '-20%' }}
+                  animate={{
+                    left: xpAnimating ? '120%' : '-20%',
+                    transition: { duration: 1, ease: 'easeInOut' }
+                  }}
+                />
+                
+                {/* Milestone dots for progress visualization */}
+                {[25, 50, 75].map(milestone => (
+                  <div 
+                    key={`milestone-${milestone}`}
+                    className="xp-milestone"
+                    style={{ left: `${milestone}%` }}
+                  />
+                ))}
+                
+                {/* XP gain animation */}
+                <AnimatePresence>
+                  {xpAnimating && (
+                    <motion.div
+                      className="absolute top-0 right-0 bottom-0 left-0 flex items-center justify-center"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      transition={{ duration: 0.3 }}
+                    >
+                      <motion.div 
+                        className="text-sm font-bold text-cyan-300 shadow-glow"
+                        initial={{ y: 10, opacity: 0 }}
+                        animate={{ y: -20, opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        transition={{ duration: 0.8 }}
+                      >
+                        +XP
+                      </motion.div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            </div>
+          </div>
+        </motion.div>
       )}
     </div>
   );
